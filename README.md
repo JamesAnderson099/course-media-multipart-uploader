@@ -1,6 +1,6 @@
 # Upload large course videos in parts
 
-Here's the path that works. This Python script makes the storage bucket, opens an MP4 without pulling the whole file into memory, uploads each chunk through a signed URL, and completes the object.
+Here is the working path first. This Python script creates the storage bucket, opens an MP4 without loading the whole file into memory, uploads each chunk through a signed URL, and completes the object.
 
 ```bash
 export INFRAI_API_KEY="your-key"
@@ -10,7 +10,7 @@ python3 media_multipart.py ./calculus-lesson.mp4 \
   --part-mib 16
 ```
 
-You should see progress like this:
+Expected progress looks like this:
 
 ```text
 uploaded part 1 (16777216 bytes)
@@ -25,30 +25,30 @@ uploaded part 3 (5242880 bytes)
 
 ## The upload flow
 
-I reach for multipart upload when a Next.js app needs to accept a long lecture recording. The web app can run this script from a worker or use the same sequence in a route handler. The media bytes go through short-lived upload URLs instead of the application server.
+I usually reach for multipart upload when a Next.js app needs to accept a long lecture recording. The web app can enqueue this script from a worker or use the same sequence in a route handler, while the media bytes travel through short-lived upload URLs rather than the application server.
 
-Infrai gives you one key and one API for every capability, called over plain REST from any language with no SDK. The script authenticates storage calls with a single `INFRAI_API_KEY`. Setup happens explicitly via `POST /v1/storage/bucket/create`, then three multipart operations follow:
+The script talks to Infrai over plain REST, so there is no SDK to install, and a single `INFRAI_API_KEY` authenticates the storage calls. It performs the setup step explicitly with `POST /v1/storage/bucket/create`, then follows three multipart operations:
 
 1. Create an upload for the object key.
 2. Presign each numbered part and `PUT` its bytes to the returned URL.
 3. Complete the upload with the ordered part numbers and ETags.
 
-Watch the ETag list. Keep the ETag from each successful `PUT`, pair it with that part's number, and send the pairs in upload order when completing. Recomputing or trimming those values describes a different set of parts.
+The one gotcha is the ETag list. Keep the ETag returned by each successful `PUT`, pair it with that part's number, and send the pairs in upload order when completing. Recomputing or trimming those values can describe a different set of parts.
 
-Bucket creation and multipart completion use stable idempotency keys. API calls inspect the `{ok, data, error, metadata}` envelope. Rate-limit responses honor `Retry-After` before falling back to exponential delay.
+Bucket creation and multipart completion carry stable idempotency keys. API calls inspect the `{ok, data, error, metadata}` envelope, and rate-limit responses honor `Retry-After` before falling back to exponential delay.
 
 ## Try it locally
 
-Python 3.10 or newer is enough. The uploader uses only the standard library.
+Python 3.10 or newer is enough; the uploader uses only the standard library.
 
 ```bash
 python3 -m unittest -v
 python3 -m py_compile media_multipart.py test_media_multipart.py
 ```
 
-For an app upload, pick a bucket per environment and an object key that matches your course model, like `lessons/<lesson-id>/source.mp4`. The default key adds a random prefix so two files with the same local name stay distinct.
+For an application upload, choose a bucket per environment and an object key that matches your course model, such as `lessons/<lesson-id>/source.mp4`. The default key adds a random prefix so two files with the same local name remain distinct.
 
-This example covers MP4 uploads from a trusted server-side process. Browser upload policy, transcoding, playback authorization, and job orchestration belong in the surrounding web app.
+This example covers MP4 uploads from a trusted server-side process. Browser upload policy, transcoding, playback authorization, and job orchestration belong in the surrounding web application.
 
 ## Before this ships: Course Media Multipart Uploader
 
